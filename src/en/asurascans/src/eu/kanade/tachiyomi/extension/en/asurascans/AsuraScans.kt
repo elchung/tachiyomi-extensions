@@ -1,20 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.asurascans
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.CookieJar
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
+import okhttp3.HttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.IOException
 
 class AsuraScans : ParsedHttpSource() {
 
@@ -28,40 +24,40 @@ class AsuraScans : ParsedHttpSource() {
 
     // Clients
 
-    private lateinit var phpSessId: String
+//    private lateinit var phpSessId: String
 
-    private val searchClient = OkHttpClient().newBuilder()
-        .followRedirects(false)
-        .cookieJar(CookieJar.NO_COOKIES)
-        .build()
+//    private val searchClient = OkHttpClient().newBuilder()
+//        .followRedirects(false)
+//        .cookieJar(CookieJar.NO_COOKIES)
+//        .build()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .followRedirects(false)
-        .addInterceptor { chain ->
-            val originalRequest = chain.request()
-            when {
-                originalRequest.url().toString() == searchUrl -> {
-                    phpSessId = searchClient.newCall(originalRequest).execute()
-                        .headers("Set-Cookie")
-                        .firstOrNull { it.contains("PHPSESSID") }
-                        ?.toString()
-                        ?.substringBefore(";")
-                        ?: throw IOException("PHPSESSID missing")
-
-                    val newHeaders = headersBuilder()
-                        .add("Cookie", phpSessId)
-
-                    val contentLength = originalRequest.body()!!.contentLength()
-
-                    searchClient.newCall(GET("$baseUrl/${if (contentLength > 8000) "result" else "search"}/1", newHeaders.build())).execute()
-                }
-                originalRequest.url().toString().contains(nextSearchPageUrlRegex) -> {
-                    searchClient.newCall(originalRequest).execute()
-                }
-                else -> chain.proceed(originalRequest)
-            }
-        }
-        .build()
+//    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+//        .followRedirects(false)
+//        .addInterceptor { chain ->
+//            val originalRequest = chain.request()
+//            when {
+//                originalRequest.url().toString() == searchUrl -> {
+//                    phpSessId = searchClient.newCall(originalRequest).execute()
+//                        .headers("Set-Cookie")
+//                        .firstOrNull { it.contains("PHPSESSID") }
+//                        ?.toString()
+//                        ?.substringBefore(";")
+//                        ?: throw IOException("PHPSESSID missing")
+//
+//                    val newHeaders = headersBuilder()
+//                        .add("Cookie", phpSessId)
+//
+//                    val contentLength = originalRequest.body()!!.contentLength()
+//
+//                    searchClient.newCall(GET("$baseUrl/${if (contentLength > 8000) "result" else "search"}/1", newHeaders.build())).execute()
+//                }
+//                originalRequest.url().toString().contains(nextSearchPageUrlRegex) -> {
+//                    searchClient.newCall(originalRequest).execute()
+//                }
+//                else -> chain.proceed(originalRequest)
+//            }
+//        }
+//        .build()
 
     // Popular
 
@@ -98,9 +94,9 @@ class AsuraScans : ParsedHttpSource() {
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = HttpUrl.parse("$baseUrl/page/$page/?s=$query")
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
+//        val filterList = if (filters.isEmpty()) getFilterList() else filters
 
-        return GET(url, headers)
+        return GET(url.toString(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -117,12 +113,12 @@ class AsuraScans : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            title = select("h1.entry-title").first().text()
-            genre = select("span.mgen > a").joinToString(", ") { it.text() }
-            description = select("div.infox > div.wd-full > div.entry-content.entry-content-single > p").text()
-            thumbnail_url = select("div.thumbook > div.thumb > img").first().attr("abs:src")
-            status = select("div.tsinfo > div.imptdt > i").text().let {
-                if (it.contains("COMPLETED")) status = SManga.COMPLETED else status = SMANGA.ONGOING
+            title = document.select("h1.entry-title").first().text()
+            genre = document.select("span.mgen > a").joinToString(", ") { it.text() }
+            description = document.select("div.infox > div.wd-full > div.entry-content.entry-content-single > p").text()
+            thumbnail_url = document.select("div.thumbook > div.thumb > img").first().attr("abs:src")
+            status = document.select("div.tsinfo > div.imptdt > i").text().let {
+                if (it.contains("COMPLETED")) SManga.COMPLETED else SManga.ONGOING
             }
         }
     }
@@ -132,7 +128,7 @@ class AsuraScans : ParsedHttpSource() {
     override fun chapterListSelector() = "div.bixbox.bxcl.epcheck > div.eplister > ul > li"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a")
+//        val urlElement = element.select("a")
 
         return SChapter.create().apply {
             name = element.select("span.chapternum").text()
@@ -156,10 +152,10 @@ class AsuraScans : ParsedHttpSource() {
 
     // Filters
 
-    override fun getFilterList(): FilterList(
+    override fun getFilterList() = FilterList(
         GenericFilter("Status", getMangaStatus()),
         GenericFilter("Type", getMangaTypes()),
-        GenericFilter("Genre", getMangaGenre())
+        GenericFilter("Genre", getMangaGenres())
     )
 
 
@@ -177,7 +173,7 @@ class AsuraScans : ParsedHttpSource() {
         "Comic"
     )
 
-    private fun getGenreList() = arrayOf(
+    private fun getMangaGenres() = arrayOf(
         "Action",
         "Adaptation",
         "Adult",
