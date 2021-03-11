@@ -11,6 +11,9 @@ import okhttp3.HttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.*
 
 class AsuraScans : ParsedHttpSource() {
 
@@ -21,6 +24,8 @@ class AsuraScans : ParsedHttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
+
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
     // Clients
 
@@ -65,7 +70,7 @@ class AsuraScans : ParsedHttpSource() {
         return GET("$baseUrl/manga/?page=$page&order=update", headers)
     }
 
-    override fun popularMangaSelector() = "div.listupd div.bs div.bsx"  // todo might be .listupd > .bs > .bsx
+    override fun popularMangaSelector() = "div.listupd div.bs div.bsx" // todo might be .listupd > .bs > .bsx
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
@@ -73,7 +78,7 @@ class AsuraScans : ParsedHttpSource() {
                 setUrlWithoutDomain(it.attr("href"))
                 title = it.attr("title")
             }
-            thumbnail_url = element.select("img").attr("abs:src")  //todo might jsut be src, might just be img
+            thumbnail_url = element.select("img").attr("abs:src") // todo might jsut be src, might just be img
         }
     }
 
@@ -107,7 +112,7 @@ class AsuraScans : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request {  // todo need to check if manga.url is /comics/name or just /name
+    override fun mangaDetailsRequest(manga: SManga): Request {
         return GET("$baseUrl/${manga.url}")
     }
 
@@ -122,32 +127,36 @@ class AsuraScans : ParsedHttpSource() {
             }
         }
     }
+//    override fun chapterListParse(response: Response): List<SChapter> {
+//        val document = response.asJsoup()
+//        val dataIdSelector = "div[id^=chapterlist]"
+//
+//        return document.select(chapterListSelector())
+//            .map { chapterFromElement(it) }
+//    }
 
-    // Chapters
-    //do i need chapterListParse??
     override fun chapterListSelector() = "div.bixbox.bxcl.epcheck > div.eplister > ul > li"
 
     override fun chapterFromElement(element: Element): SChapter {
-//        val urlElement = element.select("a")
-
         return SChapter.create().apply {
             name = element.select("span.chapternum").text()
+            date_upload = parseChapterDate(element.select("span.chapterdate").text())
             setUrlWithoutDomain(element.attr("href"))
         }
     }
 
     // Pages
 
-    //todo check this
+    // todo check this
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img.alignnone.size-full").mapIndexed { i, element ->
             Page(i, element.attr("abs:src"))
         }
     }
 
-    //todo check this
+    // todo check this
     override fun imageUrlParse(document: Document): String {
-        return document.select("img.alignnone.size-full").attr("abs:src")
+        return document.select("div.rdminimal > img").attr("abs:src")
     }
 
     // Filters
@@ -157,7 +166,6 @@ class AsuraScans : ParsedHttpSource() {
         GenericFilter("Type", getMangaTypes()),
         GenericFilter("Genre", getMangaGenres())
     )
-
 
     private class GenericFilter(name: String, filters: Array<String>) : Filter.Select<String>(name, filters)
 
@@ -220,4 +228,31 @@ class AsuraScans : ParsedHttpSource() {
         "Virtual Reality",
         "Wuxia"
     )
+
+    open fun parseChapterDate(date: String?): Long {
+        date ?: return 0
+
+        fun SimpleDateFormat.tryParse(string: String): Long {
+            return try {
+                parse(string)?.time ?: 0
+            } catch (_: ParseException) {
+                0
+            }
+        }
+
+        return when {
+            date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
+                // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
+                date.split(" ").map {
+                    if (it.contains(Regex("""\d\D\D"""))) {
+                        it.replace(Regex("""\D"""), "")
+                    } else {
+                        it
+                    }
+                }
+                    .let { dateFormat.tryParse(it.joinToString(" ")) }
+            }
+            else -> dateFormat.tryParse(date)
+        }
+    }
 }
