@@ -13,7 +13,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.ParseException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
 class AsuraScans : ParsedHttpSource() {
 
@@ -146,11 +146,12 @@ class AsuraScans : ParsedHttpSource() {
     }
 
     // Pages
+    private val pageListSelector = "div.rdminimal > img"
 
     // todo check this
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.alignnone.size-full").mapIndexed { i, element ->
-            Page(i, element.attr("abs:src"))
+        return document.select(pageListSelector).mapIndexed { i, element ->
+            Page(i, element.attr("src"))
         }
     }
 
@@ -229,7 +230,7 @@ class AsuraScans : ParsedHttpSource() {
         "Wuxia"
     )
 
-    open fun parseChapterDate(date: String?): Long {
+    private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
         fun SimpleDateFormat.tryParse(string: String): Long {
