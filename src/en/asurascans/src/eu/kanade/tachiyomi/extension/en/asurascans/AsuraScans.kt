@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+// import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -26,44 +27,6 @@ class AsuraScans : ParsedHttpSource() {
     override val supportsLatest = true
 
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
-
-    // Clients
-
-//    private lateinit var phpSessId: String
-
-//    private val searchClient = OkHttpClient().newBuilder()
-//        .followRedirects(false)
-//        .cookieJar(CookieJar.NO_COOKIES)
-//        .build()
-
-//    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-//        .followRedirects(false)
-//        .addInterceptor { chain ->
-//            val originalRequest = chain.request()
-//            when {
-//                originalRequest.url().toString() == searchUrl -> {
-//                    phpSessId = searchClient.newCall(originalRequest).execute()
-//                        .headers("Set-Cookie")
-//                        .firstOrNull { it.contains("PHPSESSID") }
-//                        ?.toString()
-//                        ?.substringBefore(";")
-//                        ?: throw IOException("PHPSESSID missing")
-//
-//                    val newHeaders = headersBuilder()
-//                        .add("Cookie", phpSessId)
-//
-//                    val contentLength = originalRequest.body()!!.contentLength()
-//
-//                    searchClient.newCall(GET("$baseUrl/${if (contentLength > 8000) "result" else "search"}/1", newHeaders.build())).execute()
-//                }
-//                originalRequest.url().toString().contains(nextSearchPageUrlRegex) -> {
-//                    searchClient.newCall(originalRequest).execute()
-//                }
-//                else -> chain.proceed(originalRequest)
-//            }
-//        }
-//        .build()
-
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
@@ -127,13 +90,6 @@ class AsuraScans : ParsedHttpSource() {
             }
         }
     }
-//    override fun chapterListParse(response: Response): List<SChapter> {
-//        val document = response.asJsoup()
-//        val dataIdSelector = "div[id^=chapterlist]"
-//
-//        return document.select(chapterListSelector())
-//            .map { chapterFromElement(it) }
-//    }
 
     override fun chapterListSelector() = "div.bixbox.bxcl.epcheck > div.eplister > ul > li"
 
@@ -141,27 +97,26 @@ class AsuraScans : ParsedHttpSource() {
         return SChapter.create().apply {
             name = element.select("span.chapternum").text()
             date_upload = parseChapterDate(element.select("span.chapterdate").text())
-            setUrlWithoutDomain(element.attr("href"))
+            setUrlWithoutDomain(element.select("a").attr("href"))
         }
     }
 
     // Pages
-    private val pageListSelector = "div.rdminimal > img"
+    private val pageListSelector = "div.rdminimal > p > img"
 
     // todo check this
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListSelector).mapIndexed { i, element ->
-            Page(i, element.attr("src"))
-        }
+        val pages = mutableListOf<Page>()
+        document.select(pageListSelector)
+            .filterNot { it.attr("src").isNullOrEmpty() }
+            .mapIndexed { i, element -> pages.add(Page(i, "", element.attr("abs:src"))) }
+
+        return pages
     }
 
-    // todo check this
-    override fun imageUrlParse(document: Document): String {
-        return document.select("div.rdminimal > img").attr("abs:src")
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used")
 
     // Filters
-
     override fun getFilterList() = FilterList(
         GenericFilter("Status", getMangaStatus()),
         GenericFilter("Type", getMangaTypes()),
